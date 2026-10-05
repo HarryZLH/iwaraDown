@@ -1,0 +1,47 @@
+{
+  "manifest_version": 3,
+  "name": "iwaraDown（byHarryZhang）",
+  "version": "1.0",
+  "description": "批量下载 Iwara 视频",
+  "permissions": [
+    "storage",
+    "downloads",
+    "activeTab",
+    "scripting"
+  ],
+  "host_permissions": [
+    "*://*.iwara.tv/*",
+    "*://*.iwara.moe/*",
+    "*://api.iwara.tv/*",
+    "*://*.iwara.*/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["*://*.iwara.tv/*", "*://*.iwara.moe/*"],
+      "js": ["gm-compat.js", "content.js"],
+      "run_at": "document_start",
+      "all_frames": false
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": ["iwaraDown.user.js", "gm-compat.js"],
+      "matches": ["*://*.iwara.tv/*", "*://*.iwara.moe/*"]
+    }
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png"
+    }
+  }
+}
