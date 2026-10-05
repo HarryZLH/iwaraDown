@@ -35,7 +35,7 @@
 // @grant             window.close
 // @run-at            document-start
 // @noframes
-// @version           1.0
+// @version           3.3.123.1
 // ==/UserScript==
 "use strict";
 (() => {
@@ -352,10 +352,10 @@
     maxFindPages: 64,
     pageLimit: 50
   };
-  if (unsafeWindow.iwaraDown) {
+  if (unsafeWindow.IwaraDownloadTool) {
     throw `Script is already running`;
   }
-  unsafeWindow.iwaraDown = true;
+  unsafeWindow.IwaraDownloadTool = true;
   var domain = window.location.hostname;
   var isOfficial = site_default.officialDomains.some((d) => domain === d || domain.endsWith("." + d));
   if (!isOfficial && site_default.phishingKeywords.some((k2) => domain.includes(k2))) {
@@ -1737,7 +1737,7 @@
   }, has(n, t) {
     return g(n, t) || e.has(n, t);
   } }));
-  var DB_NAME = "iwaraDown";
+  var DB_NAME = "IwaraDownloadTool";
   var DB_VERSION = 22;
   function upgradeDatabase(db2, oldVersion) {
     if (!db2.objectStoreNames.contains("follows")) {
