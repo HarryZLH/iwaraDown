@@ -35,7 +35,7 @@
 // @grant             window.close
 // @run-at            document-start
 // @noframes
-// @version           3.3.123.1
+// @version           1.0.0
 // ==/UserScript==
 "use strict";
 (() => {
@@ -352,10 +352,10 @@
     maxFindPages: 64,
     pageLimit: 50
   };
-  if (unsafeWindow.IwaraDownloadTool) {
+  if (unsafeWindow.iwaraDown) {
     throw `Script is already running`;
   }
-  unsafeWindow.IwaraDownloadTool = true;
+  unsafeWindow.iwaraDown = true;
   var domain = window.location.hostname;
   var isOfficial = site_default.officialDomains.some((d) => domain === d || domain.endsWith("." + d));
   if (!isOfficial && site_default.phishingKeywords.some((k2) => domain.includes(k2))) {
@@ -1737,7 +1737,7 @@
   }, has(n, t) {
     return g(n, t) || e.has(n, t);
   } }));
-  var DB_NAME = "IwaraDownloadTool";
+  var DB_NAME = "iwaraDown";
   var DB_VERSION = 22;
   function upgradeDatabase(db2, oldVersion) {
     if (!db2.objectStoreNames.contains("follows")) {
@@ -6280,6 +6280,34 @@
         background: color-mix(in srgb, var(--muted) 70%, transparent) !important;
       }
     `);
+    
+    // Migrate old database if exists
+    const OLD_DB_NAME = 'IwaraDownloadTool';
+    if (DB_NAME !== OLD_DB_NAME) {
+      try {
+        const oldReq = indexedDB.open(OLD_DB_NAME);
+        oldReq.onsuccess = (e) => {
+          const oldDb = e.target.result;
+          const oldVersion = oldDb.version;
+          oldDb.close();
+          // Delete old database
+          indexedDB.deleteDatabase(OLD_DB_NAME);
+          log.info('Migrated from old database:', OLD_DB_NAME);
+        };
+        oldReq.onerror = () => {};
+      } catch(e) {}
+    }
+    // Migrate old GM_* values
+    const oldKeys = GM_listValues().filter(k => k.startsWith('IwaraDownloadTool'));
+    if (oldKeys.length > 0) {
+      oldKeys.forEach(k => {
+        const newKey = k.replace('IwaraDownloadTool', 'iwaraDown');
+        GM_setValue(newKey, GM_getValue(k));
+        GM_deleteValue(k);
+      });
+      log.info('Migrated', oldKeys.length, 'old settings');
+    }
+    
     const migration = await runMigrations({ selectList });
     if (migration === "failed") return;
     if (migration === "reload") {
