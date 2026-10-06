@@ -1295,10 +1295,7 @@
     zh: zh_cn_default
   };
   var DownloadType = ((DownloadType2) => {
-    DownloadType2[DownloadType2["Aria2"] = 0] = "Aria2";
-    DownloadType2[DownloadType2["Iwaradl"] = 1] = "Iwaradl";
-    DownloadType2[DownloadType2["Browser"] = 2] = "Browser";
-    DownloadType2[DownloadType2["Others"] = 3] = "Others";
+    DownloadType2[DownloadType2["Browser"] = 0] = "Browser";
     return DownloadType2;
   })(DownloadType || {});
   var PageType = ((PageType3) => {
@@ -1370,7 +1367,7 @@
     filterUnlistedAndPrivate: false,
     autoCollapseMenu: true,
     downloadPriority: "Source",
-    downloadType: 3,
+    downloadType: 0,
     downloadPath: "/Iwara/%#AUTHOR#%/%#TITLE#%[%#ID#%].mp4",
     downloadProxy: "",
     downloadProxyUsername: "",
@@ -2996,75 +2993,9 @@
     }
     return true;
   }
-  async function aria2Check() {
-    try {
-      let res = await (await unlimitedFetch(config.aria2Path, {
-        method: "POST",
-        headers: {
-          accept: "application/json",
-          "content-type": "application/json"
-        },
-        body: JSON.stringify({
-          jsonrpc: "2.0",
-          method: "aria2.tellActive",
-          id: UUID(),
-          params: ["token:" + config.aria2Token]
-        })
-      })).json();
-      if (res.error) {
-        throw new Error(res.error.message);
-      }
-    } catch (error) {
-      let toast = newToast(3, {
-        node: toastNode([`Aria2 RPC %#connectionTest#%`, { nodeType: "br" }, stringify(error)], "%#settingsCheck#%"),
-        position: "center",
-        onClick() {
-          toast.hide();
-        }
-      });
-      toast.show();
-      return false;
-    }
-    return true;
-  }
-  async function iwaradlCheck() {
-    try {
-      let res = await (await unlimitedFetch(config.iwaradlPath, {
-        method: "GET",
-        headers: {
-          accept: "application/json",
-          "content-type": "application/json",
-          authorization: `Bearer ${config.iwaradlToken}`
-        }
-      })).json();
-      if (!isArray(res)) {
-        throw new Error(`后端未启动或无响应`);
-      }
-    } catch (error) {
-      newToast(3, {
-        node: toastNode([`iwaradl RPC %#connectionTest#%`, { nodeType: "br" }, stringify(error)], "%#settingsCheck#%"),
-        position: "center",
-        onClick() {
-          this.hide();
-        }
-      }).show();
-      return false;
-    }
-    return true;
-  }
   async function check() {
     if (await localPathCheck()) {
-      switch (config.downloadType) {
-        case 0:
-          return await aria2Check();
-        case 1:
-          return await iwaradlCheck();
-        case 2:
-          return await EnvCheck();
-        default:
-          break;
-      }
-      return true;
+      return await EnvCheck();
     } else {
       return false;
     }
@@ -3722,101 +3653,8 @@
     }
   }
   var log10 = createLogger("Aria2");
-  async function aria2API(method, params) {
-    return await (await unlimitedFetch(config.aria2Path, {
-      headers: {
-        accept: "application/json",
-        "content-type": "application/json"
-      },
-      body: JSON.stringify(
-        {
-          jsonrpc: "2.0",
-          method,
-          id: UUID(),
-          params: [`token:${config.aria2Token}`, ...params]
-        },
-        (_, v2) => typeof v2 === "boolean" ? String(v2) : v2
-      ),
-      method: "POST"
-    })).json();
-  }
-  function aria2TaskExtractVideoID(task) {
-    try {
-      if (isNullOrUndefined(task.files) || task.files.length !== 1) return;
-      const file = task.files[0];
-      if (isNullOrUndefined(file)) return;
-      if (file.uris.length < 1) return;
-      let downloadUrl = file.uris[0].uri.toURL();
-      if (isNullOrUndefined(downloadUrl)) return;
-      let videoID;
-      if (downloadUrl.searchParams.has("videoid")) videoID = downloadUrl.searchParams.get("videoid");
-      if (!isNullOrUndefined(videoID) && !videoID.isEmpty()) return videoID;
-      if (isNullOrUndefined(file.path) || file.path.isEmpty()) return;
-      let path = analyzeLocalPath(file.path);
-      if (isNullOrUndefined(path.fullName) || path.fullName.isEmpty()) return;
-      videoID = path.fullName.toLowerCase().among("[", "].mp4", false, true);
-      if (videoID.isEmpty()) return;
-      return videoID;
-    } catch (error) {
-      log10.debug(`check aria2 task file fail! ${stringify(task)}`);
-      return;
-    }
-  }
-  async function aria2Download(videoInfo, overwrite = void 0) {
-    const downloadUrl = buildDownloadUrl(videoInfo);
-    const localPath = getDownloadPath(videoInfo);
-    const downloadParams = prune({
-      "allow-overwrite": true,
-      "all-proxy": config.downloadProxy,
-      "all-proxy-passwd": !config.downloadProxy.isEmpty() ? config.downloadProxyPassword : void 0,
-      "all-proxy-user": !config.downloadProxy.isEmpty() ? config.downloadProxyUsername : void 0,
-      out: localPath.fullName,
-      dir: localPath.directory,
-      referer: window.location.hostname,
-      header: ["Cookie:" + unsafeWindow.document.cookie]
-    });
-    try {
-      let res = await aria2API("aria2.addUri", [[downloadUrl.href], downloadParams]);
-      if (res.result.isEmpty()) throw `aria2 下载失败：${stringify(res)}`;
-      newToast(1, {
-        gravity: "bottom",
-        node: toastNode(`${videoInfo.Title}[${videoInfo.ID}] %#pushTaskSucceed#%`)
-      }).show();
-      enqueueAria2TrackTask(videoInfo.ID, res.result, downloadParams);
-    } catch (error) {
-      newToast(1, {
-        gravity: "bottom",
-        node: toastNode(`${videoInfo.Title}[${videoInfo.ID}] %#pushTaskFail#%`)
-      }).show();
-    }
-  }
   var log11 = createLogger("Aria2Track");
   var mediaLog = createLogger("MediaCenter");
-  var ARIA2_TRACK_QUEUE_KEY = "Aria2TrackQueue";
-  var ARIA2_TRACK_MANAGER_LOCK = "aria2TrackManager";
-  var ARIA2_TRACK_ELECTION_INTERVAL = 4e3;
-  var ARIA2_TRACK_SCAN_INTERVAL = 6e4;
-  var ARIA2_TRACK_POLL_INTERVAL_ACTIVE = 1e3 * 4;
-  var ARIA2_TRACK_POLL_INTERVAL_IDLE = 1e3 * 8;
-  var ARIA2_TRACK_POLL_INTERVAL_BACKOFF = 1e3 * 32;
-  function aria2TrackPollInterval(status) {
-    switch (status) {
-      case "active":
-        return ARIA2_TRACK_POLL_INTERVAL_ACTIVE;
-      case "waiting":
-      case "paused":
-        return ARIA2_TRACK_POLL_INTERVAL_IDLE;
-      default:
-        return status === void 0 ? ARIA2_TRACK_POLL_INTERVAL_IDLE : ARIA2_TRACK_POLL_INTERVAL_BACKOFF;
-    }
-  }
-  var ARIA2_SLOW_SPEED_THRESHOLD = 64 * 1024;
-  var ARIA2_TRACK_SLOW_START_EXEMPT_POLLS = 16;
-  var aria2TrackOwner = UUID();
-  var aria2TrackLock = new GMLock(aria2TrackOwner);
-  var aria2TrackManagerLoopRunning = false;
-  var aria2TrackWorkers = new Set();
-  var aria2TrackQueue = new GMSyncDictionary(ARIA2_TRACK_QUEUE_KEY, [], (value) => isString(value?.videoId) && isString(value?.gid));
   aria2TrackQueue.onSet = () => {
     if (aria2TrackLock.isHeld(ARIA2_TRACK_MANAGER_LOCK)) syncAria2TrackWorkers();
   };
@@ -4405,59 +4243,6 @@
     return DOWNLOAD_LINK_PATTERNS.filter((i) => comment.toLowerCase().includes(i)).any();
   }
   var log13 = createLogger("Download");
-  function iwaradlDownload(videoInfo) {
-    ;
-    (async function(videoInfo2) {
-      try {
-        let proxyURL;
-        if (!config.downloadProxy.isEmpty()) {
-          proxyURL = new URL(config.downloadProxy);
-          proxyURL.username = config.downloadProxyUsername;
-          proxyURL.password = config.downloadProxyPassword;
-        }
-        let downloadPathTemplate = new Path(config.downloadPath, false);
-        let response = await unlimitedFetch(config.iwaradlPath, {
-          method: "POST",
-          headers: {
-            accept: "application/json",
-            "content-type": "application/json",
-            authorization: `Bearer ${config.iwaradlToken}`
-          },
-          body: JSON.stringify(
-            prune({
-              urls: [`https://www.${domain2}/video/${videoInfo2.ID}`],
-              options: {
-                proxy_url: proxyURL ? proxyURL.href : void 0,
-                cookies: unsafeWindow.document.cookie,
-                download_dir: downloadPathTemplate.directory,
-                filename_template: downloadPathTemplate.fullName
-              }
-            })
-          )
-        });
-        if (response.ok) {
-          log13.info(`${videoInfo2.Title} %#pushTaskSucceed#%`);
-          newToast(1, {
-            node: toastNode(`${videoInfo2.Title}[${videoInfo2.ID}] %#pushTaskSucceed#%`)
-          }).show();
-        }
-      } catch (error) {
-        newToast(3, {
-          node: toastNode([`${videoInfo2.Title}[${videoInfo2.ID}] %#pushTaskFailed#% `, { nodeType: "br" }, stringify(error)], "%#iwaradlDownload#%"),
-          onClick() {
-            this.hide();
-          }
-        }).show();
-      }
-    })(videoInfo);
-  }
-  function othersDownload(videoInfo) {
-    ;
-    (async function(DownloadUrl) {
-      DownloadUrl.searchParams.set("download", getDownloadPath(videoInfo).fullName);
-      GM_openInTab(DownloadUrl.href, { active: false, insert: true, setParent: true });
-    })(videoInfo.DownloadUrl.toURL());
-  }
   function browserDownloadErrorParse(error) {
     let errorInfo = stringify(error);
     if (!(error instanceof Error)) {
@@ -4534,20 +4319,6 @@
       ontimeout: () => toastError(new Error("%#browserDownloadTimeout#%")),
       onload: () => URL.revokeObjectURL(url)
     });
-  }
-  function othersDownloadMetadata(videoInfo) {
-    const url = generateMatadataURL(videoInfo);
-    const metadataFile = analyzeLocalPath(getMatadataPath(videoInfo)).fullName;
-    const downloadHandle = renderNode({
-      nodeType: "a",
-      attributes: {
-        href: url,
-        download: metadataFile
-      }
-    });
-    downloadHandle.click();
-    downloadHandle.remove();
-    URL.revokeObjectURL(url);
   }
   var log14 = createLogger("DownloadQueue");
   async function addDownloadTask() {
@@ -4847,31 +4618,9 @@
           }).show();
           return;
         }
-        switch (config.downloadType) {
-          case 0:
-            aria2Download(videoInfo, true);
-            break;
-          case 1:
-            iwaradlDownload(videoInfo);
-            break;
-          case 2:
-            browserDownload(videoInfo);
-            break;
-          default:
-            othersDownload(videoInfo);
-            break;
-        }
+        browserDownload(videoInfo);
         if (config.autoDownloadMetadata) {
-          switch (config.downloadType) {
-            case 3:
-              othersDownloadMetadata(videoInfo);
-              break;
-            case 2:
-              browserDownloadMetadata(videoInfo);
-              break;
-            default:
-              break;
-          }
+          browserDownloadMetadata(videoInfo);
           log14.debug("Download task pushed:", videoInfo);
         }
         selectList.delete(videoInfo.ID);
@@ -5102,9 +4851,7 @@
   var TABS = [
     { id: "general", visible: () => true },
     { id: "download", visible: () => true },
-    { id: "aria2", visible: (target) => target.downloadType === 0 },
-    { id: "iwaradl", visible: (target) => target.downloadType === 1 },
-    { id: "mediaCenter", visible: (target) => target.downloadType === 0 && target.experimentalFeatures },
+    { id: "mediaCenter", visible: (target) => target.experimentalFeatures },
     { id: "advanced", visible: () => true }
   ];
   var CONFIG_FIELDS = [
@@ -5164,15 +4911,8 @@
     { name: "pathTruncate", type: "switch", tabs: ["download"], group: "pathNormalize" },
     { name: "pathTitleMaxLength", type: "number", tabs: ["download"], group: "pathNormalize", dependsOn: "pathTruncate" },
     { name: "pathAliasMaxLength", type: "number", tabs: ["download"], group: "pathNormalize", dependsOn: "pathTruncate" },
-    { name: "aria2Path", type: "text", tabs: ["aria2"], group: "aria2" },
-    { name: "aria2Token", type: "password", tabs: ["aria2"], group: "aria2" },
-    { name: "downloadProxy", type: "text", tabs: ["aria2", "iwaradl"], group: "proxy" },
-    { name: "downloadProxyUsername", type: "text", tabs: ["aria2", "iwaradl"], group: "proxy" },
-    { name: "downloadProxyPassword", type: "password", tabs: ["aria2", "iwaradl"], group: "proxy" },
     { name: "mediaCenterApi", type: "text", tabs: ["mediaCenter"], group: "mediaCenter", help: { text: "%#mediaCenterInfo#%", href: "https://github.com/HarryZLH/iwaraDown/wiki/MediaCenter" } },
-    { name: "mediaCenterApiKey", type: "password", tabs: ["mediaCenter"], group: "mediaCenter" },
-    { name: "iwaradlPath", type: "text", tabs: ["iwaradl"], group: "iwaradl", help: { text: "%#iwaradlLink#%", href: "https://github.com/Izumiko/iwaradl" } },
-    { name: "iwaradlToken", type: "password", tabs: ["iwaradl"], group: "iwaradl" }
+    { name: "mediaCenterApiKey", type: "password", tabs: ["mediaCenter"], group: "mediaCenter" }
   ];
   var configEdit = class {
     target;
@@ -5374,41 +5114,6 @@
         ]
       });
     }
-    downloadTypeSelect() {
-      return renderNode({
-        nodeType: "fieldset",
-        className: "downloadType",
-        childs: [
-          {
-            nodeType: "div",
-            className: "fieldTitle",
-            childs: "%#downloadType#%"
-          },
-          ...Object.keys(DownloadType).filter((i) => isNaN(Number(i))).map(
-            (type, index) => renderNode({
-              nodeType: "label",
-              childs: [
-                {
-                  nodeType: "input",
-                  attributes: {
-                    type: "radio",
-                    name: "downloadType",
-                    value: index,
-                    checked: index === Number(this.target.downloadType)
-                  },
-                  events: {
-                    change: (e) => {
-                      this.target.downloadType = Number(e.target.value);
-                    }
-                  }
-                },
-                type
-              ]
-            })
-          )
-        ]
-      });
-    }
     updateVisibility() {
       this.interface.querySelectorAll("[data-depends-on]").forEach((element) => {
         const dependsOn = element.dataset.dependsOn;
@@ -5505,7 +5210,6 @@
               ]
             })
           );
-          originalNodeAppendChild.call(panel, this.downloadTypeSelect());
         }
         const groups = new Map();
         for (const field of CONFIG_FIELDS) {
